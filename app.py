@@ -194,7 +194,7 @@ with block:
                     </svg>
                     <h1 style="font-weight: 900;">Stable Diffusion Spaces</h1>
                 </div>
-                <p style="margin-bottom: 20px;">Stable Diffusion is a state of the art text-to-image model that generates images from a text description.</p>
+                <p style="margin-bottom: 20px;">Stable Diffusion is a state of the art text-to-image model that generates images from a text description. For faster generation and forthcoming API access you can try <a href="http://beta.dreamstudio.ai/" style="text-decoration: underline;" target="_blank">DreamStudio Beta</a></p>
             </div>
         """
     )
@@ -262,7 +262,7 @@ with block:
                     <p><h4>LICENSE</h4>
 The model is licensed with an <a href="https://huggingface.co/spaces/CompVis/stable-diffusion-license" style="text-decoration: underline;" target="_blank">CreativeML Open RAIL-M</a> license. The license states that the outputs that you make fully belong to you, and you are liable when sharing it. The license forbids you from sharing any content that violates any laws, produce any harm to a person, disseminate any personal information that would be meant for harm, spread misinformation and target vulnerable groups. For the full list of restrictions please <a href="https://huggingface.co/spaces/CompVis/stable-diffusion-license" target="_blank" style="text-decoration: underline;" target="_blank">read the license</a></p>
                     <p><h4>Biases and content acknowledgment</h4>
-Despite how impressive being able to turn text into image is, beware to the fact that this model may output content that reinforces or exacerbates societal biases, as well as realistic faces, pornography and violence. The model was trained on the LAION-400M dataset, which scrapped non-curated image-text-pairs from the internet (the exception being the the removal of illegal content) and is meant for research purposes. You can read more in the <a href="https://huggingface.co/CompVis/stable-diffusion-v1-4" style="text-decoration: underline;" target="_blank">model card</a></p>
+Despite how impressive being able to turn text into image is, beware to the fact that this model may output content that reinforces or exacerbates societal biases, as well as realistic faces, pornography and violence. The model was trained on the <a href="https://laion.ai/blog/laion-5b/" style="text-decoration: underline;" target="_blank">LAION-5B dataset</a>, which scrapped non-curated image-text-pairs from the internet (the exception being the the removal of illegal content) and is meant for research purposes. You can read more in the <a href="https://huggingface.co/CompVis/stable-diffusion-v1-4" style="text-decoration: underline;" target="_blank">model card</a></p>
                </div>
            """
         )
