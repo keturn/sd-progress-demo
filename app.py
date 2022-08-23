@@ -230,7 +230,7 @@ with block:
                 text = gr.Textbox(
                     label="Enter your prompt",
                     show_label=False,
-                    max_lines=3,
+                    max_lines=1,
                     placeholder="Enter your prompt",
                 ).style(
                     border=(True, False, True, True),
