@@ -18,7 +18,7 @@ word_list = word_list_dataset["train"]['text']
 def infer(prompt, samples, steps, scale, seed):
     for filter in word_list:
         if re.search(rf"\b{filter}\b", prompt):
-            raise Exception("Unsafe content found. Please try again with different prompts.")
+            raise gr.Error("Unsafe content found. Please try again with different prompts.")
         
     generator = torch.Generator(device=device).manual_seed(seed)
     with autocast("cuda"):
@@ -36,8 +36,7 @@ def infer(prompt, samples, steps, scale, seed):
         else:
             images.append(image)
     return images
-
-
+    
 css = """
         .gradio-container {
             font-family: 'IBM Plex Sans', sans-serif;
@@ -54,13 +53,21 @@ css = """
             accent-color: #dfdfdf;
         }
         .container {
-            max-width: 1070px;
+            max-width: 730px;
             margin: auto;
-            padding-top: 2rem;
+            padding-top: 1.5rem;
+        }
+        #prompt-area {
+            max-width: 650px;
+            margin-left: auto;
+            margin-right: auto
         }
         #gallery {
+            max-width: 650px;
             min-height: 22rem;
             margin-bottom: 15px;
+            margin-left: auto;
+            margin-right: auto;
             border-bottom-right-radius: .5rem !important;
             border-bottom-left-radius: .5rem !important;
         }
@@ -86,7 +93,7 @@ css = """
         #advanced-btn {
             font-size: .7rem !important;
             line-height: 19px;
-            margin-top: 24px;
+            margin-top: 12px;
             margin-bottom: 12px;
             padding: 2px 8px;
             border-radius: 14px !important;
@@ -126,36 +133,36 @@ block = gr.Blocks(css=css)
 examples = [
     [
         'A high tech solarpunk utopia in the Amazon rainforest',
-        3,
-        40,
+        4,
+        45,
         7.5,
         1024,
     ],
     [
         'A pikachu fine dining with a view to the Eiffel Tower',
-        3,
-        40,
+        4,
+        45,
         7,
         1024,
     ],
     [
         'A mecha robot in a favela in expressionist style',
-        3,
-        40,
+        4,
+        45,
         7,
         1024,
     ],
     [
         'an insect robot preparing a delicious meal',
-        3,
-        40,
+        4,
+        45,
         7,
         1024,
     ],
     [
         "A small cabin on top of a snowy mountain in the style of disney, arstation",
-        3,
-        40,
+        4,
+        45,
         7,
         1024,
     ],
@@ -164,7 +171,7 @@ examples = [
 with block:
     gr.HTML(
         """
-            <div style="text-align: center; max-width: 736px; margin: 0 auto;">
+            <div style="text-align: center; max-width: 650px; margin: 0 auto;">
               <div
                 style="
                   display: inline-flex;
@@ -207,12 +214,12 @@ with block:
                   <rect x="23" y="69" width="23" height="23" fill="black"></rect>
                 </svg>
                 <h1 style="font-weight: 900; margin-bottom: 7px;">
-                  Stable Diffusion Spaces
+                  Stable Diffusion Demo
                 </h1>
               </div>
-              <p style="margin-bottom: 20px;">
+              <p style="margin-bottom: 10px; font-size: 94%">
                 Stable Diffusion is a state of the art text-to-image model that generates
-                images from a text description. For faster generation and forthcoming API
+                images from text.<br>For faster generation and forthcoming API
                 access you can try
                 <a
                   href="http://beta.dreamstudio.ai/"
@@ -225,7 +232,7 @@ with block:
         """
     )
     with gr.Group():
-        with gr.Box():
+        with gr.Box(elem_id="prompt-area"):
             with gr.Row().style(mobile_collapse=False, equal_height=True):
                 text = gr.Textbox(
                     label="Enter your prompt",
@@ -244,18 +251,18 @@ with block:
 
         gallery = gr.Gallery(
             label="Generated images", show_label=False, elem_id="gallery"
-        ).style(grid=[3], height="auto")
+        ).style(grid=[2], height="auto")
 
         advanced_button = gr.Button("Advanced options", elem_id="advanced-btn")
 
         with gr.Row(elem_id="advanced-options"):
-            samples = gr.Slider(label="Images", minimum=1, maximum=3, value=3, step=1)
-            steps = gr.Slider(label="Steps", minimum=1, maximum=50, value=40, step=1)
+            samples = gr.Slider(label="Images", minimum=1, maximum=4, value=4, step=1)
+            steps = gr.Slider(label="Steps", minimum=1, maximum=50, value=45, step=1)
             scale = gr.Slider(
                 label="Guidance Scale", minimum=0, maximum=50, value=7.5, step=0.1
             )
             seed = gr.Slider(
-                label="Random seed",
+                label="Seed",
                 minimum=0,
                 maximum=2147483647,
                 step=1,
