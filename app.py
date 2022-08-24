@@ -62,13 +62,7 @@ css = """
             margin: auto;
             padding-top: 1.5rem;
         }
-        #prompt-area {
-            max-width: 650px;
-            margin-left: auto;
-            margin-right: auto
-        }
         #gallery {
-            max-width: 650px;
             min-height: 22rem;
             margin-bottom: 15px;
             margin-left: auto;
@@ -237,7 +231,7 @@ with block:
         """
     )
     with gr.Group():
-        with gr.Box(elem_id="prompt-area"):
+        with gr.Box():
             with gr.Row().style(mobile_collapse=False, equal_height=True):
                 text = gr.Textbox(
                     label="Enter your prompt",
