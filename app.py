@@ -299,4 +299,4 @@ Despite how impressive being able to turn text into image is, beware to the fact
            """
         )
 
-block.queue(max_size=10).launch()
+block.queue(max_size=25).launch()
