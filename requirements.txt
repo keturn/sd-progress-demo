@@ -1,4 +1,4 @@
--e git+https://github.com/Narsil/diffusers.git@8b6b1d7024f6d4159f0dd0725aa84a524ff54f66#egg=diffusers
+-e git+https://github.com/Narsil/diffusers.git@6a4d2ef1e514a25ff5b511cafa1f06b039f0909b#egg=diffusers
 transformers
 nvidia-ml-py3
 ftfy
