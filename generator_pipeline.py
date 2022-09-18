@@ -1,4 +1,5 @@
 import warnings
+from dataclasses import dataclass
 from typing import List, Optional, Union
 
 import torch
@@ -13,7 +14,14 @@ from diffusers.pipelines.stable_diffusion import StableDiffusionPipelineOutput
 from diffusers.pipelines.stable_diffusion.safety_checker import StableDiffusionSafetyChecker
 
 
-class StableDiffusionPipeline(DiffusionPipeline):
+@dataclass
+class PipelineIntermediateState:
+    step: int
+    timestep: int
+    latents: torch.Tensor
+
+
+class StableDiffusionGeneratorPipeline(DiffusionPipeline):
     r"""
     Pipeline for text-to-image generation using Stable Diffusion.
 
@@ -115,8 +123,6 @@ class StableDiffusionPipeline(DiffusionPipeline):
         guidance_scale: Optional[float] = 7.5,
         generator: Optional[torch.Generator] = None,
         latents: Optional[torch.FloatTensor] = None,
-        output_type: Optional[str] = "pil",
-        return_dict: bool = True,
         **extra_step_kwargs,
     ):
         r"""
@@ -166,39 +172,77 @@ class StableDiffusionPipeline(DiffusionPipeline):
         # of the Imagen paper: https://arxiv.org/pdf/2205.11487.pdf . `guidance_scale = 1`
         # corresponds to doing no classifier free guidance.
         do_classifier_free_guidance = guidance_scale > 1.0
-
         text_embeddings = self.get_text_embeddings(prompt, do_classifier_free_guidance, batch_size)
-
         self.scheduler.set_timesteps(num_inference_steps)
-
         latents = self.prepare_latents(latents, batch_size, height, width, generator)
 
         for i, t in enumerate(self.progress_bar(self.scheduler.timesteps)):
             # expand the latents if we are doing classifier free guidance
-            latent_model_input = torch.cat([latents] * 2) if do_classifier_free_guidance else latents
-            if isinstance(self.scheduler, LMSDiscreteScheduler):
-                sigma = self.scheduler.sigmas[i]
-                # the model input needs to be scaled to match the continuous ODE formulation in K-LMS
-                latent_model_input = latent_model_input / ((sigma**2 + 1) ** 0.5)
-
-            # predict the noise residual
-            noise_pred = self.unet(latent_model_input, t, encoder_hidden_states=text_embeddings).sample
-
-            # perform guidance
-            if do_classifier_free_guidance:
-                noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
-                noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
-
-            # compute the previous noisy sample x_t -> x_t-1
-            if isinstance(self.scheduler, LMSDiscreteScheduler):
-                latents = self.scheduler.step(noise_pred, i, latents, **extra_step_kwargs).prev_sample
-            else:
-                latents = self.scheduler.step(noise_pred, t, latents, **extra_step_kwargs).prev_sample
+            latents = self.step(i, t, latents, guidance_scale, text_embeddings, **extra_step_kwargs)
 
         image = self.decode_to_image(latents)
         output = StableDiffusionPipelineOutput(images=image, nsfw_content_detected=[])
         return self.check_for_safety(output)
 
+    def generate(
+        self,
+        prompt: Union[str, List[str]],
+        height: Optional[int] = 512,
+        width: Optional[int] = 512,
+        num_inference_steps: Optional[int] = 50,
+        guidance_scale: Optional[float] = 7.5,
+        generator: Optional[torch.Generator] = None,
+        latents: Optional[torch.FloatTensor] = None,
+        **extra_step_kwargs,
+    ):
+        if isinstance(prompt, str):
+            batch_size = 1
+        else:
+            batch_size = len(prompt)
+
+        if height % 64 != 0 or width % 64 != 0:
+            raise ValueError(f"`height` and `width` have to be divisible by 64 but are {height} and {width}.")
+
+        # here `guidance_scale` is defined analog to the guidance weight `w` of equation (2)
+        # of the Imagen paper: https://arxiv.org/pdf/2205.11487.pdf . `guidance_scale = 1`
+        # corresponds to doing no classifier free guidance.
+        do_classifier_free_guidance = guidance_scale > 1.0
+        text_embeddings = self.get_text_embeddings(prompt, do_classifier_free_guidance, batch_size)
+        self.scheduler.set_timesteps(num_inference_steps)
+        latents = self.prepare_latents(latents, batch_size, height, width, generator)
+
+        for i, t in enumerate(self.progress_bar(self.scheduler.timesteps)):
+            yield PipelineIntermediateState(step=i, timestep=t, latents=latents)
+            # expand the latents if we are doing classifier free guidance
+            latents = self.step(i, t, latents, guidance_scale, text_embeddings, **extra_step_kwargs)
+
+        image = self.decode_to_image(latents)
+        output = StableDiffusionPipelineOutput(images=image, nsfw_content_detected=[])
+        yield self.check_for_safety(output)
+
+    @torch.no_grad()
+    def step(self, i, t, latents, guidance_scale, text_embeddings, **extra_step_kwargs):
+        do_classifier_free_guidance = guidance_scale > 1.0
+
+        latent_model_input = torch.cat([latents] * 2) if do_classifier_free_guidance else latents
+        if isinstance(self.scheduler, LMSDiscreteScheduler):
+            sigma = self.scheduler.sigmas[i]
+            # the model input needs to be scaled to match the continuous ODE formulation in K-LMS
+            latent_model_input = latent_model_input / ((sigma ** 2 + 1) ** 0.5)
+        # predict the noise residual
+        noise_pred = self.unet(latent_model_input, t, encoder_hidden_states=text_embeddings).sample
+        # perform guidance
+        if do_classifier_free_guidance:
+            noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
+            noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
+        # compute the previous noisy sample x_t -> x_t-1
+        if isinstance(self.scheduler, LMSDiscreteScheduler):
+            latents = self.scheduler.step(noise_pred, i, latents, **extra_step_kwargs).prev_sample
+        else:
+            latents = self.scheduler.step(noise_pred, t, latents, **extra_step_kwargs).prev_sample
+        return latents
+
+    @torch.no_grad()
     def check_for_safety(self, output):
         images = output.images
         safety_checker_output = self.feature_extractor(self.numpy_to_pil(images),
@@ -207,6 +251,7 @@ class StableDiffusionPipeline(DiffusionPipeline):
             images=images, clip_input=safety_checker_output.pixel_values)
         return StableDiffusionPipelineOutput(screened_images, has_nsfw_concept)
 
+    @torch.no_grad()
     def decode_to_image(self, latents):
         # scale and decode the image latents with vae
         latents = 1 / 0.18215 * latents
@@ -215,6 +260,7 @@ class StableDiffusionPipeline(DiffusionPipeline):
         image = image.cpu().permute(0, 2, 3, 1).numpy()
         return image
 
+    @torch.no_grad()
     def get_text_embeddings(self, prompt, do_classifier_free_guidance, batch_size):
         # get prompt text embeddings
         text_input = self.tokenizer(
