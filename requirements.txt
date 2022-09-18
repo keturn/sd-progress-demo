@@ -1,0 +1,10 @@
+-e git+https://github.com/huggingface/diffusers.git@429dace10a356a776f935fc11e16d5b321b496f3#egg=diffusers
+datasets~=2.4.0
+ftfy
+gradio~=3.3.1
+numpy~=1.23.2
+nvidia-ml-py3
+Pillow~=9.2.0
+transformers~=4.21.3
+--extra-index-url https://download.pytorch.org/whl/cu113
+torch~=1.12.1
