@@ -1,8 +1,7 @@
 import gradio as gr
 
 import torch
-from torch import autocast
-from diffusers import StableDiffusionPipeline
+from pipeline_with_callback import StableDiffusionPipelineWithCallback
 from datasets import load_dataset
 from PIL import Image  
 import re
@@ -11,7 +10,7 @@ model_id = "CompVis/stable-diffusion-v1-4"
 device = "cuda"
 
 #If you are running this code locally, you need to either do a 'huggingface-cli login` or paste your User Access Token from here https://huggingface.co/settings/tokens into the use_auth_token field below. 
-pipe = StableDiffusionPipeline.from_pretrained(model_id, use_auth_token=True, revision="fp16", torch_dtype=torch.float16)
+pipe = StableDiffusionPipelineWithCallback.from_pretrained(model_id, use_auth_token=True, revision="fp16", torch_dtype=torch.float16)
 pipe = pipe.to(device)
 torch.backends.cudnn.benchmark = True
 
