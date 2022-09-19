@@ -211,11 +211,11 @@ class StableDiffusionGeneratorPipeline(DiffusionPipeline):
         self.scheduler.set_timesteps(num_inference_steps)
         latents = self.prepare_latents(latents, batch_size, height, width, generator)
 
+        yield PipelineIntermediateState(step=-1, timestep=self.scheduler.num_train_timesteps, latents=latents)
         for i, t in enumerate(self.progress_bar(self.scheduler.timesteps)):
-            yield PipelineIntermediateState(step=i, timestep=t, latents=latents)
-            # expand the latents if we are doing classifier free guidance
             latents = self.step(i, t, latents, guidance_scale, text_embeddings, **extra_step_kwargs)
-
+            yield PipelineIntermediateState(step=i, timestep=t, latents=latents)
+            
         image = self.decode_to_image(latents)
         output = StableDiffusionPipelineOutput(images=image, nsfw_content_detected=[])
         yield self.check_for_safety(output)
@@ -224,6 +224,7 @@ class StableDiffusionGeneratorPipeline(DiffusionPipeline):
     def step(self, i, t, latents, guidance_scale, text_embeddings, **extra_step_kwargs):
         do_classifier_free_guidance = guidance_scale > 1.0
 
+        # expand the latents if we are doing classifier free guidance
         latent_model_input = torch.cat([latents] * 2) if do_classifier_free_guidance else latents
         if isinstance(self.scheduler, LMSDiscreteScheduler):
             sigma = self.scheduler.sigmas[i]

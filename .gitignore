@@ -1,3 +1,4 @@
 /.ipynb_checkpoints/
 /gradio_cached_examples/
 /venv.previews/
+*.pyc

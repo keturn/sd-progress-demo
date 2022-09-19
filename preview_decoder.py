@@ -55,5 +55,5 @@ class ApproximateDecoder:
 
     def __call__(self, latents) -> PIL.Image.Image:
         """Get an RGB JPEG representation of the latent data."""
-        rgb = torch.einsum('lhw,lr -> rhw', latents, self.latent_rgb_factors)
+        rgb = torch.einsum('...lhw,lr -> ...rhw', latents, self.latent_rgb_factors)
         return float_tensor_to_pil(rgb)
