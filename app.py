@@ -1,22 +1,31 @@
 import gradio as gr
 
 import torch
-from pipeline_with_callback import StableDiffusionPipelineWithCallback
-from datasets import load_dataset
-from PIL import Image  
+from generator_pipeline import StableDiffusionGeneratorPipeline, PipelineIntermediateState
+from preview_decoder import ApproximateDecoder
+from PIL import Image
 import re
 
 model_id = "CompVis/stable-diffusion-v1-4"
 device = "cuda"
 
-#If you are running this code locally, you need to either do a 'huggingface-cli login` or paste your User Access Token from here https://huggingface.co/settings/tokens into the use_auth_token field below. 
-pipe = StableDiffusionPipelineWithCallback.from_pretrained(model_id, use_auth_token=True, revision="fp16", torch_dtype=torch.float16)
+#If you are running this code locally, you need to either do a 'huggingface-cli login` or paste your User Access Token from here https://huggingface.co/settings/tokens into the use_auth_token field below.
+pipe = StableDiffusionGeneratorPipeline.from_pretrained(
+    model_id, use_auth_token=True,
+    revision="fp16", torch_dtype=torch.float16,
+)
 pipe = pipe.to(device)
+pipe.enable_attention_slicing()
 torch.backends.cudnn.benchmark = True
 
-#When running locally, you won`t have access to this, so you can remove this part
-word_list_dataset = load_dataset("stabilityai/word-list", data_files="list.txt", use_auth_token=True)
-word_list = word_list_dataset["train"]['text']
+# When running locally, you won`t have access to this, so you can remove this part
+# word_list_dataset = load_dataset("stabilityai/word-list", data_files="list.txt", use_auth_token=True)
+# word_list = word_list_dataset["train"]['text']
+WORD_LIST = 'https://raw.githubusercontent.com/coffee-and-fun/google-profanity-words/main/data/list.txt'
+import requests
+
+word_list = [word for word in requests.get(WORD_LIST).text.split('\n') if word and not word.isspace()]
+
 
 def infer(prompt, samples, steps, scale, seed):
     #When running locally you can also remove this filter
@@ -25,22 +34,35 @@ def infer(prompt, samples, steps, scale, seed):
             raise gr.Error("Unsafe content found. Please try again with different prompts.")
         
     generator = torch.Generator(device=device).manual_seed(seed)
-    
-    images_list = pipe(
-        [prompt] * samples,
-        num_inference_steps=steps,
-        guidance_scale=scale,
-        generator=generator,
-    )
+
+    with torch.autocast(pipe.device.type):
+        yield from pipe.generate(
+            [prompt] * samples,
+            num_inference_steps=steps,
+            guidance_scale=scale,
+            generator=generator,
+        )
+
+
+def replace_unsafe_images(output):
     images = []
     safe_image = Image.open(r"unsafe.png")
-    for i, image in enumerate(images_list["sample"]):
-        if(images_list["nsfw_content_detected"][i]):
+    for image, is_unsafe in zip(output.images, output.nsfw_content_detected):
+        if is_unsafe:
             images.append(safe_image)
         else:
             images.append(image)
     return images
-    
+
+
+approximate_decoder = ApproximateDecoder.for_pipeline(pipe)
+
+
+def percent_complete(timestep):
+    max_timestep = pipe.scheduler.num_train_timesteps
+    return 1. - timestep / max_timestep
+
+
 css = """
         .gradio-container {
             font-family: 'IBM Plex Sans', sans-serif;
@@ -131,36 +153,36 @@ block = gr.Blocks(css=css)
 examples = [
     [
         'A high tech solarpunk utopia in the Amazon rainforest',
-        4,
-        45,
+        2,
+        20,
         7.5,
         1024,
     ],
     [
         'A pikachu fine dining with a view to the Eiffel Tower',
-        4,
-        45,
+        2,
+        20,
         7,
         1024,
     ],
     [
         'A mecha robot in a favela in expressionist style',
-        4,
-        45,
+        2,
+        20,
         7,
         1024,
     ],
     [
         'an insect robot preparing a delicious meal',
-        4,
-        45,
+        2,
+        20,
         7,
         1024,
     ],
     [
         "A small cabin on top of a snowy mountain in the style of Disney, artstation",
-        4,
-        45,
+        2,
+        20,
         7,
         1024,
     ],
@@ -242,6 +264,7 @@ with block:
                     rounded=(True, False, False, True),
                     container=False,
                 )
+                btn_label = "Generate image"
                 btn = gr.Button("Generate image").style(
                     margin=False,
                     rounded=(False, True, True, False),
@@ -251,11 +274,28 @@ with block:
             label="Generated images", show_label=False, elem_id="gallery"
         ).style(grid=[2], height="auto")
 
+
+        def progressive_infer(*args, **kwargs):
+            print(f"okay ready {args} {kwargs}")
+            for result in infer(*args, **kwargs):
+                print(f"getting result {type(result)}")
+                if isinstance(result, PipelineIntermediateState):
+                    previews = [approximate_decoder(latents) for latents in result.latents]
+                    yield {
+                        gallery: previews,
+                        btn: btn.update(value=f"{btn_label} [{percent_complete(result.timestep)*100:.1f}%]")
+                   }
+                else:
+                    yield {
+                        gallery: replace_unsafe_images(result),
+                        btn: btn.update(value=btn_label),
+                    }
+
         advanced_button = gr.Button("Advanced options", elem_id="advanced-btn")
 
         with gr.Row(elem_id="advanced-options"):
-            samples = gr.Slider(label="Images", minimum=1, maximum=4, value=4, step=1)
-            steps = gr.Slider(label="Steps", minimum=1, maximum=50, value=45, step=1)
+            samples = gr.Slider(label="Images", minimum=1, maximum=4, value=2, step=1)
+            steps = gr.Slider(label="Steps", minimum=1, maximum=50, value=20, step=1)
             scale = gr.Slider(
                 label="Guidance Scale", minimum=0, maximum=50, value=7.5, step=0.1
             )
@@ -267,12 +307,12 @@ with block:
                 randomize=True,
             )
 
-        ex = gr.Examples(examples=examples, fn=infer, inputs=[text, samples, steps, scale, seed], outputs=gallery, cache_examples=True)
+        ex = gr.Examples(examples=examples, fn=infer, inputs=[text, samples, steps, scale, seed],
+                         outputs=gallery)  # , cache_examples=True)
         ex.dataset.headers = [""]
 
-        
-        text.submit(infer, inputs=[text, samples, steps, scale, seed], outputs=gallery)
-        btn.click(infer, inputs=[text, samples, steps, scale, seed], outputs=gallery)
+        text.submit(progressive_infer, inputs=[text, samples, steps, scale, seed], outputs=[gallery, btn])
+        btn.click(progressive_infer, inputs=[text, samples, steps, scale, seed], outputs=[gallery, btn])
         advanced_button.click(
             None,
             [],
